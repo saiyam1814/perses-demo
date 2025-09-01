@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: o11y-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-metrics
+  namespace: o11y-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: demo-metrics }
+  template:
+    metadata:
+      labels: { app: demo-metrics }
+    spec:
+      containers:
+        - name: app
+          image: saiyam911/perses-demo:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-metrics
+  namespace: o11y-demo
+  labels: { app: demo-metrics }
+spec:
+  selector: { app: demo-metrics }
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Prometheus Operator will discover this via ServiceMonitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: demo-metrics
+  namespace: o11y-demo
+  labels:
+    release: kube-prometheus-stack   # MUST match your Helm release name
+spec:
+  selector:
+    matchLabels:
+      app: demo-metrics
+  namespaceSelector:
+    matchNames: ["o11y-demo"]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+
